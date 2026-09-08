@@ -3,6 +3,7 @@ from telegram.ext import Application, CommandHandler
 
 from .config import BOT_TOKEN
 from .db import init_db
+from .seed import seed_database
 from .handlers.user import get_user_handlers
 
 
@@ -19,6 +20,7 @@ def main():
         raise RuntimeError("BOT_TOKEN تنظیم نشده است.")
 
     init_db()
+    seed_database()
 
     app = Application.builder().token(BOT_TOKEN).build()
 
