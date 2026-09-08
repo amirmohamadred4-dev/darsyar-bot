@@ -2,3 +2,4 @@ python-telegram-bot==22.5
 SQLAlchemy==2.0.43
 psycopg[binary]==3.2.10
 tzdata==2025.2
+psycopg2-binary
