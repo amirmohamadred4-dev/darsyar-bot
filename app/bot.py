@@ -1,25 +1,16 @@
 from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-)
+from telegram.ext import Application, CommandHandler
 
 from .config import BOT_TOKEN
 from .db import init_db
+from .handlers.user import get_user_handlers
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context):
     await update.message.reply_text(
         "سلام 👋\n"
         "به مشاور درسی یازدهم خوش اومدی! 📚\n\n"
         "برای شروع روی /register بزن."
-    )
-
-
-async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "📝 ثبت‌نام در نسخه‌ی بعدی فعال می‌شود."
     )
 
 
@@ -32,7 +23,9 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("register", register))
+
+    for handler in get_user_handlers():
+        app.add_handler(handler)
 
     print("🤖 Bot is running...")
     app.run_polling()
