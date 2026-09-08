@@ -1,5 +1,13 @@
-# app/seed.py
-# برنامه دبیرها — برای تغییر برنامه، فقط این فایل را ویرایش کنید.
+from datetime import time
+
+from .db import session, Teacher, Class
+from .config import DAY_TO_NUM
+
+
+# ============================================================
+# برنامه درسی پایه یازدهم
+# برای تغییر برنامه، فقط همین بخش را ویرایش کنید.
+# ============================================================
 
 SCHEDULES = {
     "تجربی": [
@@ -12,8 +20,6 @@ SCHEDULES = {
         ("یکشنبه", "عربی", ["استاد ترابی", "استاد پورمهدی", "استاد شاهرودی"], "22:00", "23:15"),
 
         ("دوشنبه", "فارسی", ["دکتر جعفری", "استاد توکلی", "استاد محسنی"], "18:30", "20:00"),
-        ("دوشنبه", "شیمی", ["استاد مومن‌زاده"], "20:15", "21:45"),
-        ("دوشنبه", "شیمی", ["دکتر هادیان‌فرد", "استاد مصلایی"], "20:15", "23:15"),
 
         ("سه‌شنبه", "دین و زندگی", ["استاد محسنی کبیر", "استاد صائلی"], "18:30", "20:00"),
 
@@ -30,8 +36,6 @@ SCHEDULES = {
         ("یکشنبه", "عربی", ["استاد ترابی", "استاد پورمهدی", "استاد شاهرودی"], "22:00", "23:15"),
 
         ("دوشنبه", "فارسی", ["دکتر جعفری", "استاد توکلی", "استاد محسنی"], "18:30", "20:00"),
-        ("دوشنبه", "شیمی", ["استاد مومن‌زاده"], "20:15", "21:45"),
-        ("دوشنبه", "شیمی", ["دکتر هادیان‌فرد", "استاد مصلایی"], "20:15", "23:15"),
 
         ("سه‌شنبه", "دین و زندگی", ["استاد محسنی کبیر", "استاد صائلی"], "18:30", "20:00"),
         ("سه‌شنبه", "آمار و احتمال", ["استاد کارگر", "استاد شریف‌خطیبی"], "20:15", "21:45"),
@@ -59,9 +63,84 @@ SCHEDULES = {
 }
 
 
-def load_schedule():
-    """
-    این تابع برنامه خام را برمی‌گرداند.
-    بعداً می‌توان برنامه را از فایل یا منبع دیگری نیز وارد کرد.
-    """
-    return SCHEDULES
+def parse_time(value):
+    hour, minute = map(int, value.split(":"))
+    return time(hour, minute)
+
+
+def seed_database():
+    db = session()
+
+    try:
+        for field, schedules in SCHEDULES.items():
+
+            for day, subject, teachers, start, end in schedules:
+
+                # ساخت دبیرها در صورت نبودن
+                teacher_objects = []
+
+                for teacher_name in teachers:
+                    teacher = (
+                        db.query(Teacher)
+                        .filter(
+                            Teacher.name == teacher_name,
+                            Teacher.subject == subject,
+                            Teacher.field == field,
+                        )
+                        .first()
+                    )
+
+                    if teacher is None:
+                        teacher = Teacher(
+                            name=teacher_name,
+                            subject=subject,
+                            field=field,
+                        )
+                        db.add(teacher)
+                        db.flush()
+
+                    teacher_objects.append(teacher)
+
+                # ساخت کلاس برای هر دبیر
+                for teacher in teacher_objects:
+
+                    exists = (
+                        db.query(Class)
+                        .filter(
+                            Class.teacher_id == teacher.id,
+                            Class.day_of_week == DAY_TO_NUM[day],
+                            Class.start_time == parse_time(start),
+                            Class.end_time == parse_time(end),
+                        )
+                        .first()
+                    )
+
+                    if exists:
+                        continue
+
+                    new_class = Class(
+                        teacher_id=teacher.id,
+                        subject=subject,
+                        field=field,
+                        day_of_week=DAY_TO_NUM[day],
+                        start_time=parse_time(start),
+                        end_time=parse_time(end),
+                        title=subject,
+                        source="seed",
+                    )
+
+                    db.add(new_class)
+
+        db.commit()
+        print("✅ برنامه درسی با موفقیت وارد دیتابیس شد.")
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    seed_database()
