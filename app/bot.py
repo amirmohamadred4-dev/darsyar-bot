@@ -1,13 +1,20 @@
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler
 
 from .config import BOT_TOKEN
 from .db import init_db, session, User
 from .seed import seed_database
-from .handlers.user import get_user_handlers, main_menu, start_register
+
+from .handlers.user import (
+    get_user_handlers,
+    main_menu,
+    start_register,
+)
+
+from .admin import get_admin_handlers
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context):
     telegram_id = update.effective_user.id
 
     db = session()
@@ -31,7 +38,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         db.close()
 
-    # کاربر قبلاً ثبت‌نام کرده
     if name:
         context.user_data.clear()
 
@@ -43,9 +49,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "از منوی زیر استفاده کن:",
             reply_markup=main_menu(),
         )
+
         return
 
-    # کاربر جدید
     await start_register(update, context)
 
 
@@ -56,10 +62,7 @@ def main():
             "BOT_TOKEN تنظیم نشده است."
         )
 
-    # ساخت جداول
     init_db()
-
-    # وارد کردن دبیرها و برنامه‌ها
     seed_database()
 
     app = (
@@ -69,11 +72,13 @@ def main():
         .build()
     )
 
+    # 👑 پنل ادمین
+    for handler in get_admin_handlers():
+        app.add_handler(handler)
+
+    # 👤 بخش کاربران
     app.add_handler(
-        CommandHandler(
-            "start",
-            start
-        )
+        CommandHandler("start", start)
     )
 
     for handler in get_user_handlers():
