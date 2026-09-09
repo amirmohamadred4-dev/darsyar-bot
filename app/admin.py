@@ -1,3 +1,5 @@
+import os
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     CommandHandler,
@@ -11,70 +13,161 @@ from .config import ADMIN_ID
 from .db import session, User, Teacher, Class
 
 
-# =========================
-# 🔐 ورود به پنل ادمین
-# =========================
+# =========================================================
+# 🔐 تنظیمات امنیتی
+# =========================================================
 
-async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
-    if user_id != ADMIN_ID:
+
+# =========================================================
+# 🧰 بررسی دسترسی ادمین
+# =========================================================
+
+def is_admin(update: Update) -> bool:
+    return (
+        update.effective_user is not None
+        and update.effective_user.id == ADMIN_ID
+    )
+
+
+# =========================================================
+# 🔐 شروع ورود ادمین
+# =========================================================
+
+async def admin_entry(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not is_admin(update):
         await update.effective_message.reply_text(
             "⛔️ شما اجازه ورود به پنل مدیریت را ندارید."
         )
         return
 
-    context.user_data["admin_logged_in"] = True
-    await show_admin_panel(update, context)
+    if not ADMIN_PASSWORD:
+        await update.effective_message.reply_text(
+            "⚠️ رمز ادمین در تنظیمات Railway ثبت نشده است."
+        )
+        return
+
+    context.user_data["admin_waiting_password"] = True
+    context.user_data["admin_logged_in"] = False
+
+    await update.effective_message.reply_text(
+        "🔐 <b>ورود به پنل مدیریت</b>\n\n"
+        "رمز ورود ادمین را ارسال کن:",
+        parse_mode="HTML",
+    )
 
 
-# =========================
+# =========================================================
+# 🔑 بررسی رمز
+# =========================================================
+
+async def admin_password_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not is_admin(update):
+        return
+
+    if not context.user_data.get("admin_waiting_password"):
+        return
+
+    password = update.effective_message.text.strip()
+
+    if password == ADMIN_PASSWORD:
+        context.user_data["admin_waiting_password"] = False
+        context.user_data["admin_logged_in"] = True
+
+        await update.effective_message.reply_text(
+            "✅ ورود موفق بود!\n\n"
+            "🔐 خوش اومدی مدیر 👑"
+        )
+
+        await show_admin_panel(update, context)
+
+    else:
+        await update.effective_message.reply_text(
+            "❌ رمز اشتباه است.\n\n"
+            "دوباره رمز را وارد کن:"
+        )
+
+
+# =========================================================
 # 🛠 منوی اصلی ادمین
-# =========================
+# =========================================================
 
 def admin_menu():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📊 آمار کلی", callback_data="admin:stats"),
-            InlineKeyboardButton("👥 کاربران", callback_data="admin:users"),
+            InlineKeyboardButton(
+                "📊 آمار کلی",
+                callback_data="admin:stats"
+            ),
+            InlineKeyboardButton(
+                "👥 کاربران",
+                callback_data="admin:users"
+            ),
         ],
         [
-            InlineKeyboardButton("👨‍🏫 دبیرها", callback_data="admin:teachers"),
-            InlineKeyboardButton("📚 کلاس‌ها", callback_data="admin:classes"),
+            InlineKeyboardButton(
+                "👨‍🏫 دبیرها",
+                callback_data="admin:teachers"
+            ),
+            InlineKeyboardButton(
+                "📚 کلاس‌ها",
+                callback_data="admin:classes"
+            ),
         ],
         [
-            InlineKeyboardButton("🔄 بروزرسانی", callback_data="admin:panel"),
-            InlineKeyboardButton("🚪 خروج", callback_data="admin:exit"),
+            InlineKeyboardButton(
+                "🔄 بروزرسانی",
+                callback_data="admin:panel"
+            ),
+            InlineKeyboardButton(
+                "🚪 خروج",
+                callback_data="admin:exit"
+            ),
         ],
     ])
 
 
-async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_admin_panel(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     text = (
         "🔐 <b>پنل مدیریت</b>\n\n"
-        "سلام مدیر 👋\n"
+        "👑 سلام مدیر!\n\n"
         "از منوی زیر بخش موردنظر را انتخاب کن:"
     )
+
+    keyboard = admin_menu()
 
     if update.callback_query:
         await update.callback_query.edit_message_text(
             text,
             parse_mode="HTML",
-            reply_markup=admin_menu(),
+            reply_markup=keyboard,
         )
     else:
         await update.effective_message.reply_text(
             text,
             parse_mode="HTML",
-            reply_markup=admin_menu(),
+            reply_markup=keyboard,
         )
 
 
-# =========================
+# =========================================================
 # 📊 آمار کلی
-# =========================
+# =========================================================
 
-async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_stats(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
     await query.answer()
 
@@ -83,9 +176,23 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         total_users = db.query(User).count()
 
-        riazi = db.query(User).filter(User.field == "ریاضی").count()
-        tajrobi = db.query(User).filter(User.field == "تجربی").count()
-        ensani = db.query(User).filter(User.field == "انسانی").count()
+        riazi = (
+            db.query(User)
+            .filter(User.field == "ریاضی")
+            .count()
+        )
+
+        tajrobi = (
+            db.query(User)
+            .filter(User.field == "تجربی")
+            .count()
+        )
+
+        ensani = (
+            db.query(User)
+            .filter(User.field == "انسانی")
+            .count()
+        )
 
         total_teachers = db.query(Teacher).count()
         total_classes = db.query(Class).count()
@@ -104,22 +211,30 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📚 تعداد کلاس‌ها: <b>{total_classes}</b>"
     )
 
-    keyboard = [
-        [InlineKeyboardButton("🔙 برگشت", callback_data="admin:panel")]
-    ]
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🔙 برگشت",
+                callback_data="admin:panel"
+            )
+        ]
+    ])
 
     await query.edit_message_text(
         text,
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=keyboard,
     )
 
 
-# =========================
+# =========================================================
 # 👥 کاربران
-# =========================
+# =========================================================
 
-async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_users(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
     await query.answer()
 
@@ -132,37 +247,57 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
             .limit(20)
             .all()
         )
+
+        user_data = []
+
+        for user in users:
+            user_data.append({
+                "name": user.name,
+                "grade": user.grade,
+                "field": user.field,
+                "telegram_id": user.telegram_id,
+            })
+
     finally:
         db.close()
 
-    if not users:
+    if not user_data:
         text = "👥 هنوز هیچ کاربری ثبت‌نام نکرده است."
     else:
         text = "👥 <b>آخرین کاربران</b>\n\n"
 
-        for i, user in enumerate(users, 1):
+        for i, user in enumerate(user_data, 1):
             text += (
-                f"{i}. {user.name}\n"
-                f"   🎓 {user.grade} | 📖 {user.field}\n"
-                f"   🆔 {user.telegram_id}\n\n"
+                f"{i}. <b>{user['name']}</b>\n"
+                f"   🎓 پایه: {user['grade']}\n"
+                f"   📖 رشته: {user['field']}\n"
+                f"   🆔 ID: <code>{user['telegram_id']}</code>\n\n"
             )
 
-    keyboard = [
-        [InlineKeyboardButton("🔙 برگشت", callback_data="admin:panel")]
-    ]
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🔙 برگشت",
+                callback_data="admin:panel"
+            )
+        ]
+    ])
 
     await query.edit_message_text(
         text,
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=keyboard,
     )
 
 
-# =========================
+# =========================================================
 # 👨‍🏫 دبیرها
-# =========================
+# =========================================================
 
-async def admin_teachers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_teachers(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
     await query.answer()
 
@@ -171,46 +306,80 @@ async def admin_teachers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         teachers = (
             db.query(Teacher)
-            .order_by(Teacher.field, Teacher.subject, Teacher.name)
+            .order_by(
+                Teacher.field,
+                Teacher.subject,
+                Teacher.name
+            )
             .all()
         )
+
+        teacher_data = [
+            {
+                "name": teacher.name,
+                "subject": teacher.subject,
+                "field": teacher.field,
+            }
+            for teacher in teachers
+        ]
+
     finally:
         db.close()
 
-    if not teachers:
+    if not teacher_data:
         text = "👨‍🏫 هیچ دبیری در سیستم ثبت نشده است."
     else:
-        text = "👨‍🏫 <b>دبیرهای ثبت‌شده</b>\n\n"
+        text = "👨‍🏫 <b>دبیرهای ثبت‌شده</b>\n"
 
         current_field = None
 
-        for teacher in teachers:
-            if teacher.field != current_field:
-                current_field = teacher.field
+        for teacher in teacher_data:
+
+            if teacher["field"] != current_field:
+                current_field = teacher["field"]
                 text += f"\n🎓 <b>{current_field}</b>\n"
 
             text += (
-                f"• {teacher.subject} — {teacher.name}\n"
+                f"• {teacher['subject']} — "
+                f"{teacher['name']}\n"
             )
 
-    keyboard = [
-        [InlineKeyboardButton("🔙 برگشت", callback_data="admin:panel")]
-    ]
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🔙 برگشت",
+                callback_data="admin:panel"
+            )
+        ]
+    ])
 
     await query.edit_message_text(
         text,
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=keyboard,
     )
 
 
-# =========================
+# =========================================================
 # 📚 کلاس‌ها
-# =========================
+# =========================================================
 
-async def admin_classes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_classes(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
     await query.answer()
+
+    days = [
+        "شنبه",
+        "یکشنبه",
+        "دوشنبه",
+        "سه‌شنبه",
+        "چهارشنبه",
+        "پنجشنبه",
+        "جمعه",
+    ]
 
     db = session()
 
@@ -224,39 +393,22 @@ async def admin_classes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             .all()
         )
-    finally:
-        db.close()
 
-    if not classes:
-        text = "📚 هیچ کلاسی در سیستم ثبت نشده است."
-    else:
-        text = "📚 <b>برنامه کلاس‌ها</b>\n\n"
-
-        days = [
-            "شنبه",
-            "یکشنبه",
-            "دوشنبه",
-            "سه‌شنبه",
-            "چهارشنبه",
-            "پنجشنبه",
-            "جمعه",
-        ]
-
-        current_field = None
+        class_data = []
 
         for cls in classes:
-            if cls.field != current_field:
-                current_field = cls.field
-                text += f"\n🎓 <b>{current_field}</b>\n"
 
-            teacher_name = "نامشخص"
+            teacher = (
+                db.query(Teacher)
+                .filter(Teacher.id == cls.teacher_id)
+                .first()
+            )
 
-            teacher = db.query(Teacher).filter(
-                Teacher.id == cls.teacher_id
-            ).first()
-
-            if teacher:
-                teacher_name = teacher.name
+            teacher_name = (
+                teacher.name
+                if teacher
+                else "نامشخص"
+            )
 
             day_name = (
                 days[cls.day_of_week]
@@ -264,39 +416,73 @@ async def admin_classes(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else "نامشخص"
             )
 
+            class_data.append({
+                "field": cls.field,
+                "subject": cls.subject,
+                "teacher": teacher_name,
+                "day": day_name,
+                "start": cls.start_time.strftime("%H:%M"),
+                "end": cls.end_time.strftime("%H:%M"),
+                "title": cls.title or "",
+            })
+
+    finally:
+        db.close()
+
+    if not class_data:
+        text = "📚 هیچ کلاسی در سیستم ثبت نشده است."
+    else:
+        text = "📚 <b>برنامه کلاس‌ها</b>\n"
+
+        current_field = None
+
+        for cls in class_data:
+
+            if cls["field"] != current_field:
+                current_field = cls["field"]
+                text += f"\n🎓 <b>{current_field}</b>\n"
+
             text += (
-                f"• {day_name} | "
-                f"{cls.start_time.strftime('%H:%M')} تا "
-                f"{cls.end_time.strftime('%H:%M')}\n"
-                f"  📖 {cls.subject}\n"
-                f"  👨‍🏫 {teacher_name}\n"
+                f"• 📅 {cls['day']}\n"
+                f"  ⏰ {cls['start']} تا {cls['end']}\n"
+                f"  📖 {cls['subject']}\n"
+                f"  👨‍🏫 {cls['teacher']}\n"
             )
 
-            if cls.title:
-                text += f"  📝 {cls.title}\n"
+            if cls["title"]:
+                text += f"  📝 {cls['title']}\n"
 
             text += "\n"
 
-    keyboard = [
-        [InlineKeyboardButton("🔙 برگشت", callback_data="admin:panel")]
-    ]
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🔙 برگشت",
+                callback_data="admin:panel"
+            )
+        ]
+    ])
 
     await query.edit_message_text(
         text,
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=keyboard,
     )
 
 
-# =========================
-# 🚪 خروج
-# =========================
+# =========================================================
+# 🚪 خروج از پنل
+# =========================================================
 
-async def admin_exit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_exit(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
     await query.answer()
 
     context.user_data.pop("admin_logged_in", None)
+    context.user_data.pop("admin_waiting_password", None)
 
     await query.edit_message_text(
         "🚪 از پنل مدیریت خارج شدی.\n\n"
@@ -304,9 +490,9 @@ async def admin_exit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# =========================
+# =========================================================
 # 🎛 مدیریت دکمه‌های ادمین
-# =========================
+# =========================================================
 
 async def admin_button_handler(
     update: Update,
@@ -314,12 +500,18 @@ async def admin_button_handler(
 ):
     query = update.callback_query
 
-    if update.effective_user.id != ADMIN_ID:
-        await query.answer("⛔️ دسترسی ندارید.", show_alert=True)
+    if not is_admin(update):
+        await query.answer(
+            "⛔️ دسترسی ندارید.",
+            show_alert=True
+        )
         return
 
     if not context.user_data.get("admin_logged_in"):
-        await query.answer("⛔️ ابتدا وارد پنل شوید.", show_alert=True)
+        await query.answer(
+            "⛔️ ابتدا وارد پنل شوید.",
+            show_alert=True
+        )
         return
 
     data = query.data
@@ -344,13 +536,19 @@ async def admin_button_handler(
         await admin_exit(update, context)
 
 
-# =========================
+# =========================================================
 # 📦 Handlerها
-# =========================
+# =========================================================
 
 def get_admin_handlers():
     return [
         CommandHandler("admin", admin_entry),
+
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            admin_password_handler
+        ),
+
         CallbackQueryHandler(
             admin_button_handler,
             pattern=r"^admin:"
