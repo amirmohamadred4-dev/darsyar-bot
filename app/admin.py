@@ -5,8 +5,6 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes,
-    MessageHandler,
-    filters,
 )
 
 from .config import ADMIN_ID
@@ -14,14 +12,14 @@ from .db import session, User, Teacher, Class
 
 
 # =========================================================
-# 🔐 تنظیمات
+# 🔐 تنظیمات امنیتی
 # =========================================================
 
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
 
 # =========================================================
-# 🧰 بررسی ادمین
+# 🧰 بررسی دسترسی ادمین
 # =========================================================
 
 def is_admin(update: Update) -> bool:
@@ -32,7 +30,7 @@ def is_admin(update: Update) -> bool:
 
 
 # =========================================================
-# 🔐 شروع ورود
+# 🔐 ورود به پنل
 # =========================================================
 
 async def admin_entry(
@@ -62,46 +60,7 @@ async def admin_entry(
 
 
 # =========================================================
-# 🔑 دریافت رمز
-# =========================================================
-
-async def admin_password_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    # اگر کاربر ادمین نیست، اصلاً کاری نکن
-    if not is_admin(update):
-        return
-
-    # اگر در حالت وارد کردن رمز نیست، کاری نکن
-    if not context.user_data.get("admin_waiting_password"):
-        return
-
-    password = update.effective_message.text.strip()
-
-    if password == ADMIN_PASSWORD:
-
-        context.user_data["admin_waiting_password"] = False
-        context.user_data["admin_logged_in"] = True
-
-        await update.effective_message.reply_text(
-            "✅ <b>ورود موفق بود!</b>\n\n"
-            "👑 خوش اومدی مدیر",
-            parse_mode="HTML",
-        )
-
-        await show_admin_panel(update, context)
-
-    else:
-
-        await update.effective_message.reply_text(
-            "❌ رمز اشتباه است.\n\n"
-            "دوباره رمز را وارد کن:"
-        )
-
-
-# =========================================================
-# 🛠 منوی پنل
+# 🛠 منوی اصلی ادمین
 # =========================================================
 
 def admin_menu():
@@ -484,6 +443,7 @@ async def admin_classes(
             )
 
             if cls["title"]:
+
                 text += (
                     f"  📝 {cls['title']}\n"
                 )
@@ -619,20 +579,13 @@ async def admin_button_handler(
 def get_admin_handlers():
 
     return [
-
         CommandHandler(
             "admin",
             admin_entry
-        ),
-
-        MessageHandler(
-            filters.TEXT
-            & ~filters.COMMAND,
-            admin_password_handler
         ),
 
         CallbackQueryHandler(
             admin_button_handler,
             pattern=r"^admin:"
         ),
-            ]
+        ]
