@@ -10,7 +10,15 @@ from telegram.ext import (
 )
 
 from ..config import FIELDS, GRADE, DAYS, TIMEZONE
-from ..db import session, User, Teacher, UserTeacher, Class, ClassRecord, UserSettings
+from ..db import (
+    session,
+    User,
+    Teacher,
+    UserTeacher,
+    Class,
+    ClassRecord,
+    UserSettings,
+)
 
 
 # =========================
@@ -31,7 +39,10 @@ def main_menu():
             InlineKeyboardButton("📊 عملکرد من", callback_data="performance"),
         ],
         [
-            InlineKeyboardButton("🔔 تنظیمات یادآوری", callback_data="reminders"),
+            InlineKeyboardButton(
+                "🔔 تنظیمات یادآوری",
+                callback_data="reminders"
+            ),
         ],
         [
             InlineKeyboardButton("⚙️ تنظیمات", callback_data="settings"),
@@ -47,6 +58,7 @@ def main_menu():
 
 def get_user(telegram_id):
     db = session()
+
     try:
         return (
             db.query(User)
@@ -444,6 +456,9 @@ async def show_weekly(query, update):
             f"👨‍🏫 {teacher.name}\n\n"
         )
 
+    if not classes:
+        text += "\n📭 برای دبیرهای انتخابی تو کلاسی ثبت نشده."
+
     await query.edit_message_text(
         text,
         reply_markup=main_menu(),
@@ -596,9 +611,18 @@ async def show_performance(query, update):
         db.close()
 
     total = len(records)
-    seen = sum(1 for r in records if r.status == "seen")
-    unseen = sum(1 for r in records if r.status == "unseen")
-    pending = sum(1 for r in records if r.status == "pending")
+    seen = sum(
+        1 for r in records
+        if r.status == "seen"
+    )
+    unseen = sum(
+        1 for r in records
+        if r.status == "unseen"
+    )
+    pending = sum(
+        1 for r in records
+        if r.status == "pending"
+    )
 
     if total:
         percent = round((seen / total) * 100)
@@ -646,7 +670,10 @@ async def show_reminders(query, update):
     db = session()
 
     try:
-        settings = get_or_create_settings(db, user.id)
+        settings = get_or_create_settings(
+            db,
+            user.id
+        )
 
         enabled = settings.reminders_enabled
         minutes = settings.reminder_minutes
@@ -766,24 +793,41 @@ async def show_settings(query, update):
 # هندلر اصلی دکمه‌ها
 # =========================
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     query = update.callback_query
     await query.answer()
 
     data = query.data
 
+    # =====================
     # ثبت نام
+    # =====================
+
     if data == "register":
-        await start_register(update, context)
+
+        await start_register(
+            update,
+            context
+        )
+
         return
 
+    # =====================
     # خانه
+    # =====================
+
     if data == "home":
 
-        user = get_user(update.effective_user.id)
+        user = get_user(
+            update.effective_user.id
+        )
 
         if user:
+
             await query.edit_message_text(
                 f"📚 منوی اصلی\n\n"
                 f"سلام {user.name} 👋\n"
@@ -791,7 +835,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "یکی از گزینه‌ها رو انتخاب کن:",
                 reply_markup=main_menu(),
             )
+
         else:
+
             await query.edit_message_text(
                 "👋 برای شروع ثبت‌نام کن.",
                 reply_markup=InlineKeyboardMarkup([
@@ -806,22 +852,38 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # =====================
     # پایه
+    # =====================
+
     if data == "grade:11":
+
         await show_fields(query)
+
         return
 
+    # =====================
     # رشته
+    # =====================
+
     if data.startswith("field:"):
 
-        field = data.split(":", 1)[1]
-        name = context.user_data.get("name")
+        field = data.split(
+            ":",
+            1
+        )[1]
+
+        name = context.user_data.get(
+            "name"
+        )
 
         if not name:
+
             await query.edit_message_text(
                 "❌ اطلاعات ثبت‌نام پیدا نشد.\n"
                 "دوباره ثبت‌نام کن."
             )
+
             return
 
         db = session()
@@ -831,19 +893,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user = (
                 db.query(User)
                 .filter(
-                    User.telegram_id == update.effective_user.id
+                    User.telegram_id
+                    == update.effective_user.id
                 )
                 .first()
             )
 
             if user:
+
                 user.name = name
                 user.grade = GRADE
                 user.field = field
 
-                # انتخاب‌های قبلی پاک می‌شوند
                 db.query(UserTeacher).filter(
-                    UserTeacher.user_id == user.id
+                    UserTeacher.user_id
+                    == user.id
                 ).delete()
 
             else:
@@ -858,7 +922,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 db.add(user)
                 db.flush()
 
-            get_or_create_settings(db, user.id)
+            get_or_create_settings(
+                db,
+                user.id
+            )
 
             db.commit()
 
@@ -879,10 +946,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # =====================
     # انتخاب دبیر هنگام ثبت نام
+    # =====================
+
     if data.startswith("teacher:"):
 
-        _, teacher_id, subject = data.split(":", 2)
+        _, teacher_id, subject = data.split(
+            ":",
+            2
+        )
+
         teacher_id = int(teacher_id)
 
         db = session()
@@ -892,7 +966,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user = (
                 db.query(User)
                 .filter(
-                    User.telegram_id == update.effective_user.id
+                    User.telegram_id
+                    == update.effective_user.id
                 )
                 .first()
             )
@@ -910,8 +985,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             if old:
+
                 old.teacher_id = teacher_id
+
             else:
+
                 db.add(
                     UserTeacher(
                         user_id=user.id,
@@ -925,7 +1003,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         finally:
             db.close()
 
-        index = context.user_data["subject_index"] + 1
+        index = (
+            context.user_data["subject_index"]
+            + 1
+        )
+
         subjects = context.user_data["subjects"]
 
         if index < len(subjects):
@@ -950,25 +1032,55 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # =====================
     # برنامه امروز
+    # =====================
+
     if data == "today":
-        await show_today(query, update)
+
+        await show_today(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # برنامه هفتگی
+    # =====================
+
     if data == "weekly":
-        await show_weekly(query, update)
+
+        await show_weekly(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # دبیرهای من
+    # =====================
+
     if data == "teachers":
-        await show_my_teachers(query, update)
+
+        await show_my_teachers(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # تغییر دبیر یک درس
+    # =====================
+
     if data.startswith("change_teacher:"):
 
-        subject = data.split(":", 1)[1]
+        subject = data.split(
+            ":",
+            1
+        )[1]
 
         await change_teacher(
             query,
@@ -978,10 +1090,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # =====================
     # ثبت دبیر جدید
+    # =====================
+
     if data.startswith("change:"):
 
-        _, teacher_id, subject = data.split(":", 2)
+        _, teacher_id, subject = data.split(
+            ":",
+            2
+        )
 
         teacher_id = int(teacher_id)
 
@@ -992,7 +1110,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user = (
                 db.query(User)
                 .filter(
-                    User.telegram_id == update.effective_user.id
+                    User.telegram_id
+                    == update.effective_user.id
                 )
                 .first()
             )
@@ -1009,9 +1128,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
                 if selected:
+
                     selected.teacher_id = teacher_id
 
                 else:
+
                     db.add(
                         UserTeacher(
                             user_id=user.id,
@@ -1032,97 +1153,207 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # =====================
     # عملکرد
+    # =====================
+
     if data == "performance":
-        await show_performance(query, update)
+
+        await show_performance(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # تنظیمات یادآوری
+    # =====================
+
     if data == "reminders":
-        await show_reminders(query, update)
+
+        await show_reminders(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # روشن/خاموش یادآوری
+    # =====================
+
     if data == "toggle_reminders":
 
-        user = get_user(update.effective_user.id)
+        user = get_user(
+            update.effective_user.id
+        )
+
+        if not user:
+            return
 
         db = session()
 
         try:
-            settings = get_or_create_settings(db, user.id)
-            settings.reminders_enabled = not settings.reminders_enabled
+
+            settings = get_or_create_settings(
+                db,
+                user.id
+            )
+
+            settings.reminders_enabled = (
+                not settings.reminders_enabled
+            )
+
             db.commit()
+
         finally:
             db.close()
 
-        await show_reminders(query, update)
+        await show_reminders(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # زمان یادآوری
+    # =====================
+
     if data.startswith("reminder:"):
 
-        minutes = int(data.split(":", 1)[1])
+        minutes = int(
+            data.split(
+                ":",
+                1
+            )[1]
+        )
 
-        user = get_user(update.effective_user.id)
+        user = get_user(
+            update.effective_user.id
+        )
+
+        if not user:
+            return
 
         db = session()
 
         try:
-            settings = get_or_create_settings(db, user.id)
+
+            settings = get_or_create_settings(
+                db,
+                user.id
+            )
+
             settings.reminder_minutes = minutes
             settings.reminders_enabled = True
+
             db.commit()
+
         finally:
             db.close()
 
-        await show_reminders(query, update)
+        await show_reminders(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # یادآوری شروع کلاس
+    # =====================
+
     if data == "toggle_start":
 
-        user = get_user(update.effective_user.id)
+        user = get_user(
+            update.effective_user.id
+        )
+
+        if not user:
+            return
 
         db = session()
 
         try:
-            settings = get_or_create_settings(db, user.id)
+
+            settings = get_or_create_settings(
+                db,
+                user.id
+            )
+
             settings.start_reminder_enabled = (
                 not settings.start_reminder_enabled
             )
+
             db.commit()
+
         finally:
             db.close()
 
-        await show_reminders(query, update)
+        await show_reminders(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # گزارش شبانه
+    # =====================
+
     if data == "toggle_nightly":
 
-        user = get_user(update.effective_user.id)
+        user = get_user(
+            update.effective_user.id
+        )
+
+        if not user:
+            return
 
         db = session()
 
         try:
-            settings = get_or_create_settings(db, user.id)
+
+            settings = get_or_create_settings(
+                db,
+                user.id
+            )
+
             settings.nightly_report_enabled = (
                 not settings.nightly_report_enabled
             )
+
             db.commit()
+
         finally:
             db.close()
 
-        await show_reminders(query, update)
+        await show_reminders(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # تنظیمات
+    # =====================
+
     if data == "settings":
-        await show_settings(query, update)
+
+        await show_settings(
+            query,
+            update
+        )
+
         return
 
+    # =====================
     # تغییر رشته
+    # =====================
+
     if data == "change_field":
 
         keyboard = [
@@ -1149,12 +1380,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # =====================
     # تغییر رشته نهایی
+    # =====================
+
     if data.startswith("newfield:"):
 
-        field = data.split(":", 1)[1]
+        field = data.split(
+            ":",
+            1
+        )[1]
 
-        user = get_user(update.effective_user.id)
+        user = get_user(
+            update.effective_user.id
+        )
+
+        if not user:
+            return
 
         db = session()
 
@@ -1187,7 +1429,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # =====================
     # تغییر نام
+    # =====================
+
     if data == "change_name":
 
         context.user_data["changing_name"] = True
@@ -1203,7 +1448,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # دریافت نام جدید
 # =========================
 
-async def receive_new_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def receive_new_name(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     if not context.user_data.get("changing_name"):
         return
@@ -1211,12 +1459,16 @@ async def receive_new_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.text.strip()
 
     if len(name) < 2:
+
         await update.message.reply_text(
             "❌ نام معتبر نیست. دوباره ارسال کن:"
         )
+
         return
 
-    user = get_user(update.effective_user.id)
+    user = get_user(
+        update.effective_user.id
+    )
 
     if not user:
         return
@@ -1224,8 +1476,11 @@ async def receive_new_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = session()
 
     try:
+
         user.name = name
+
         db.commit()
+
     finally:
         db.close()
 
@@ -1238,29 +1493,73 @@ async def receive_new_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# ثبت Handler ها
+# دریافت پیام‌های متنی
 # =========================
 
-def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.user_data.get("changing_name"):
-        return receive_new_name(update, context)
+async def text_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
-    if context.user_data.get("registering"):
-        return receive_name(update, context)
+    # 🔐 رمز پنل ادمین
+    if context.user_data.get(
+        "admin_waiting_password"
+    ):
+
+        from ..admin import admin_password_handler
+
+        return await admin_password_handler(
+            update,
+            context
+        )
+
+    # ✏️ تغییر نام
+    if context.user_data.get(
+        "changing_name"
+    ):
+
+        return await receive_new_name(
+            update,
+            context
+        )
+
+    # 📝 ثبت نام
+    if context.user_data.get(
+        "registering"
+    ):
+
+        return await receive_name(
+            update,
+            context
+        )
 
     return None
 
 
-def get_user_handlers():
-    return [
-        CommandHandler("menu", show_menu),
+# =========================
+# ثبت Handler ها
+# =========================
 
-        CommandHandler("register", start_register),
+def get_user_handlers():
+
+    return [
+
+        CommandHandler(
+            "menu",
+            show_menu
+        ),
+
+        CommandHandler(
+            "register",
+            start_register
+        ),
 
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
             text_handler,
         ),
 
-        CallbackQueryHandler(button_handler),
-    ]
+        CallbackQueryHandler(
+            button_handler
+        ),
+                ]
