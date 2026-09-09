@@ -37,6 +37,7 @@ async def admin_entry(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+
     if not is_admin(update):
         await update.effective_message.reply_text(
             "⛔️ شما اجازه ورود به پنل مدیریت را ندارید."
@@ -56,6 +57,62 @@ async def admin_entry(
         "🔐 <b>ورود به پنل مدیریت</b>\n\n"
         "رمز ورود ادمین را ارسال کن:",
         parse_mode="HTML",
+    )
+
+
+# =========================================================
+# 🔑 بررسی رمز ادمین
+# =========================================================
+
+async def admin_password_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    # فقط ادمین واقعی
+    if not is_admin(update):
+
+        context.user_data.pop(
+            "admin_waiting_password",
+            None
+        )
+
+        await update.effective_message.reply_text(
+            "⛔️ دسترسی غیرمجاز."
+        )
+
+        return
+
+    # اگر منتظر رمز نیستیم
+    if not context.user_data.get(
+        "admin_waiting_password"
+    ):
+        return
+
+    password = update.effective_message.text.strip()
+
+    # بررسی رمز
+    if password != ADMIN_PASSWORD:
+
+        await update.effective_message.reply_text(
+            "❌ رمز اشتباه است.\n\n"
+            "دوباره رمز ورود را ارسال کن:"
+        )
+
+        return
+
+    # ورود موفق
+    context.user_data["admin_waiting_password"] = False
+    context.user_data["admin_logged_in"] = True
+
+    await update.effective_message.reply_text(
+        "✅ ورود موفق بود!\n\n"
+        "🔐 به پنل مدیریت خوش آمدی."
+    )
+
+    await show_admin_panel(
+        update,
+        context
     )
 
 
@@ -386,7 +443,9 @@ async def admin_classes(
 
             teacher = (
                 db.query(Teacher)
-                .filter(Teacher.id == cls.teacher_id)
+                .filter(
+                    Teacher.id == cls.teacher_id
+                )
                 .first()
             )
 
@@ -588,4 +647,4 @@ def get_admin_handlers():
             admin_button_handler,
             pattern=r"^admin:"
         ),
-        ]
+    ]
