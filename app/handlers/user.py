@@ -1241,33 +1241,26 @@ async def receive_new_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ثبت Handler ها
 # =========================
 
+def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("changing_name"):
+        return receive_new_name(update, context)
+
+    if context.user_data.get("registering"):
+        return receive_name(update, context)
+
+    return None
+
+
 def get_user_handlers():
-
     return [
+        CommandHandler("menu", show_menu),
 
-        CommandHandler(
-            "menu",
-            show_menu
-        ),
-
-        CommandHandler(
-            "register",
-            start_register
-        ),
-
-        MessageHandler(
-            filters.TEXT
-            & ~filters.COMMAND
-            & ~filters.UpdateType.EDITED_MESSAGE,
-            receive_new_name
-        ),
+        CommandHandler("register", start_register),
 
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            receive_name
+            text_handler,
         ),
 
-        CallbackQueryHandler(
-            button_handler
-        ),
+        CallbackQueryHandler(button_handler),
     ]
